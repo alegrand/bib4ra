@@ -5,7 +5,7 @@
 
 This perl script allows to split a BibTeX bibliography per type and
 year and to build a small summary, which can be quite useful for
-activity reports or CVs. [[file:publis.pdf][Here is what it looks like]]. It's a bunch of
+activity reports or CVs. [[file:temp_files/publis.pdf][Here is what it looks like]]. It's a bunch of
 hack but once you have set it up, all this goes directly in your
 report without any manual intervention.
 
@@ -44,20 +44,30 @@ recode LaTeX..UTF-8 all2.bib
 
 Most of my biblio comes from HAL. Here is what I use for getting it
 for team activity evaluation
-#+begin_src makefile :tangle Makefile.example
+#+begin_src makefile :tangle temp_files/Makefile.example
 mescal.bib:
 	wget "http://haltools.inria.fr/Public/exportPubli.php?annee_publideb=2013&annee_publifin=2016&labos_exp=mescal&affi_exp=inria&format_export=raweb&langue=Anglais&Fen=Aff&format_export=raweb" --output-document=$@
 	sed -i -e 's/ *NOTE = .*$$//g' -e 's/@incollection/@inproceedings/' $@
 #+end_src
 And here is what I use for my own publication list:
-#+begin_src makefile :tangle Makefile.example
+#+begin_src makefile :tangle temp_files/Makefile.example
 legrand.bib:
 	wget "https://haltools.inria.fr/Public/exportPubli.php?auteur_exp=Arnaud%2C+Legrand&format_export=raweb&langue=Anglais" --output-document=$@
 #+end_src
 
 So the two previous bib files can be obtained by running
 #+begin_src sh :results output :exports both
-make -f Makefile.example legrand.bib mescal.bib
+cd temp_files; make -f Makefile.example legrand.bib mescal.bib
+#+end_src
+
+#+RESULTS:
+: wget "https://haltools.inria.fr/Public/exportPubli.php?auteur_exp=Arnaud%2C+Legrand&format_export=raweb&langue=Anglais" --output-document=legrand.bib
+: wget "http://haltools.inria.fr/Public/exportPubli.php?annee_publideb=2013&annee_publifin=2016&labos_exp=mescal&affi_exp=inria&format_export=raweb&langue=Anglais&Fen=Aff&format_export=raweb" --output-document=mescal.bib
+: sed -i -e 's/ *NOTE = .*$//g' -e 's/@incollection/@inproceedings/' mescal.bib
+
+Then the nice pdf file can be generated like this:
+#+begin_src sh :results output silent :exports code
+cd temp_files; make -f Makefile.example liste_publications.tex
 #+end_src
 
 * Typical usages
@@ -67,7 +77,7 @@ generates a simple tex files and calls bibtex and for all the small
 "bib" files. There is a little bit of black magic and hardcoded names
 so that the result can be included in an other file without any
 trouble.
-#+begin_src perl :results silent :exports code :tangle bibsplit.pl
+#+begin_src perl :results silent :exports code :tangle temp_files/bibsplit.pl
   use Text::BibTeX;
   require "bibtex.pl";
 
@@ -85,7 +95,7 @@ trouble.
   system "pdflatex -interaction nonstopmode publis.tex";
 #+end_src
 *** How do I use it?
-Call the [[file:bibsplit.pl][bibsplit.pl]] script. It will generate many files. Then all you
+Call the [[file:temp_files/bibsplit.pl][bibsplit.pl]] script. It will generate many files. Then all you
 have to do is to modify your own LaTeX document as follows:
 1. =\input{liste_publications_package}= in the preamble
 2. =\input{liste_publications}= in your bibliography section
@@ -117,7 +127,7 @@ ls *-*.bib | sed 's/^/- /'
 
 I also generate a [[Text::BibTeX perl package][tex file]] (=liste_publications.tex=) that builds on
 bibtopic and creates a section to include each of the previous bib
-files. This file is included by [[file:publis.tex][publis.tex]]. All I have to do then is
+files. This file is included by [[file:temp_files/publis.tex][publis.tex]]. All I have to do then is
 to:
 1. compile =publis.tex= with pdflatex
 2. call bibtex on all the resulting .aux files
@@ -151,9 +161,9 @@ type and year. It can be used:
   | Total                                        |   42 |   41 |   35 |    3 |   121 |
   |----------------------------------------------+------+------+------+------+-------|
 
-- or as in activity reports (in which case I directly generate a [[file:liste_publications_table.tex][latex
+- or as in activity reports (in which case I directly generate a [[file:temp_files/liste_publications_table.tex][latex
   table]]).
-  #+begin_src perl :results output :exports code :tangle bibtable.pl
+  #+begin_src perl :results output :exports code :tangle temp_files/bibtable.pl
     use Text::BibTeX;
     require "bibtex.pl";
 
@@ -175,7 +185,7 @@ This is where most of the work is done. This is not intended to be
 generic or modular but it just works. Feel free to fork it and adapt.
 
 
-#+begin_src perl :results output :exports none :tangle bibtex.pl
+#+begin_src perl :results output :exports none :tangle temp_files/bibtex.pl
   use Text::BibTeX;
 
   my($maxyear) = 2016;
@@ -506,7 +516,7 @@ generic or modular but it just works. Feel free to fork it and adapt.
 * Misc 
 ** Adding calls to the perl script in the Makefile
 Here is how this can be done
-#+begin_src makefile :tangle Makefile.example
+#+begin_src makefile :tangle temp_files/Makefile.example
 liste_publications_table.tex: mescal.bib
 	perl bibtable.pl
 
@@ -514,7 +524,7 @@ liste_publications.tex: mescal.bib
 	perl bibsplit.pl  
 #+end_src
 ** Master LaTeX file
-#+begin_src sh :tangle publis.tex
+#+begin_src sh :tangle temp_files/publis.tex
 \documentclass[11pt,a4paper,twoside]{article}
 \usepackage[a4paper,margin=2cm]{geometry}
 \usepackage[utf8]{inputenc}
@@ -539,7 +549,7 @@ hypertexnames=false, breaklinks=true, colorlinks=false, pdfborder={0 00}]{hyperr
 \end{document}
 #+end_src
 ** Required LaTeX packages
-#+begin_src sh :tangle liste_publications_package.tex
+#+begin_src sh :tangle temp_files/liste_publications_package.tex
 \usepackage[utf8]{inputenc}
 \usepackage{url} \urlstyle{sf}
 \usepackage{xspace}
