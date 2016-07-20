@@ -1,0 +1,549 @@
+# -*- coding: utf-8 -*-
+#+STARTUP: overview indent inlineimages logdrawer
+#+TITLE:       Bib4ra: biblio splitting for CVs and activity reports
+#+AUTHOR:      Arnaud Legrand
+
+This perl script allows to split a BibTeX bibliography per type and
+year and to build a small summary, which can be quite useful for
+activity reports or CVs. [[file:publis.pdf][Here is what it looks like]]. It's a bunch of
+hack but once you have set it up, all this goes directly in your
+report without any manual intervention.
+
+#+BEGIN_CENTER
+_FEEL FREE TO FORK AND IMPROVE :)_
+#+END_CENTER
+
+*Usage:* Clone the repository to have all files, then read the
+information below, adapt to your needs and give it a try.
+
+*Note*: this is not really a documentation and is quite ugly. Actually,
+the whole source code is in this file (I use org-mode's tangling
+mechanism) and all the rest of the files you can find in this git are
+automatically generated files. This set of perl scripts heavily
+depends on the [[https://packages.debian.org/sid/libtext-bibtex-perl][Text::BibTeX perl package]] and on [[https://packages.debian.org/sid/tex/texlive-bibtex-extra][the bibtopic LaTeX
+package]].
+
+*History*: I've been writing such kind of things several times in shell
+using [[https://packages.debian.org/sid/tex/libtext-bibtex-perl][bibtool]], then in ruby within [[http://pistou.imag.fr/][pistou]] whose support is now
+discontinued, in perl/org-mode for the SimGrid website and ideally all
+of this will one day end up in HAL but I'm too lazy/busy to enter the
+php madness of HAL. Anyway, I finally realized after digging into this
+once more that simply sharing it could save time to others.
+
+* Tips for starting from a clean biblio
+[[https://packages.debian.org/sid/tex/bibclean][Bibclean]] is quite simple to use and I highly recommend it if you
+gather many bib entries from different sources:
+#+begin_src sh :results output :exports both
+bibclean all.bib > all2.bib
+#+end_src
+Then, you may be annoyed by accents and encoding. You may want to play
+with [[https://packages.debian.org/sid/recode][recode]] for this:
+#+begin_src sh :results output :exports both
+recode LaTeX..UTF-8 all2.bib
+#+end_src
+
+Most of my biblio comes from HAL. Here is what I use for getting it
+for team activity evaluation
+#+begin_src makefile :tangle Makefile.example
+mescal.bib:
+	wget "http://haltools.inria.fr/Public/exportPubli.php?annee_publideb=2013&annee_publifin=2016&labos_exp=mescal&affi_exp=inria&format_export=raweb&langue=Anglais&Fen=Aff&format_export=raweb" --output-document=$@
+	sed -i -e 's/ *NOTE = .*$$//g' -e 's/@incollection/@inproceedings/' $@
+#+end_src
+And here is what I use for my own publication list:
+#+begin_src makefile :tangle Makefile.example
+legrand.bib:
+	wget "https://haltools.inria.fr/Public/exportPubli.php?auteur_exp=Arnaud%2C+Legrand&format_export=raweb&langue=Anglais" --output-document=$@
+#+end_src
+
+So the two previous bib files can be obtained by running
+#+begin_src sh :results output :exports both
+make -f Makefile.example legrand.bib mescal.bib
+#+end_src
+
+* Typical usages
+** Splitting the bibliography
+The =bibsplit= function splits the bibliography in small bib files,
+generates a simple tex files and calls bibtex and for all the small
+"bib" files. There is a little bit of black magic and hardcoded names
+so that the result can be included in an other file without any
+trouble.
+#+begin_src perl :results silent :exports code :tangle bibsplit.pl
+  use Text::BibTeX;
+  require "bibtex.pl";
+
+  $biblio = "mescal.bib";
+
+  my $bibfile = new Text::BibTeX::File($biblio);
+  bibtable_bytype($bibfile,"latex");
+  bibsplit($biblio);
+  system("rm publis.aux liste_publications*.blg liste_publications*.bbl");
+  $lof = `pdflatex -interaction nonstopmode publis.tex 2>/dev/null | grep -e liste_publication | grep bibtopic | sed 's/.*liste/liste/'`;
+  foreach $i (split "\n",$lof) {
+      system "bibtex $i 2>/dev/null";
+  }
+  system "pdflatex -interaction nonstopmode publis.tex";
+  system "pdflatex -interaction nonstopmode publis.tex";
+#+end_src
+*** How do I use it?
+Call the [[file:bibsplit.pl][bibsplit.pl]] script. It will generate many files. Then all you
+have to do is to modify your own LaTeX document as follows:
+1. =\input{liste_publications_package}= in the preamble
+2. =\input{liste_publications}= in your bibliography section
+3. =\input{liste_publications_table}= somewhere if you want a nice table
+   summarizing the publications
+*** How does it work?
+From =mescal.bib=, I generate the following bib files:
+#+begin_src sh :results output org raw :exports results
+ls *-*.bib | sed 's/^/- /'
+#+end_src
+
+#+RESULTS:
+- article-2013.bib
+- article-2014.bib
+- article-2015.bib
+- article-2016.bib
+- inproceedings-2013.bib
+- inproceedings-2014.bib
+- inproceedings-2015.bib
+- others-2013.bib
+- others-2014.bib
+- others-2015.bib
+- phdthesis-2013.bib
+- phdthesis-2015.bib
+- techreport-2013.bib
+- techreport-2014.bib
+- techreport-2015.bib
+- techreport-2016.bib
+
+I also generate a [[Text::BibTeX perl package][tex file]] (=liste_publications.tex=) that builds on
+bibtopic and creates a section to include each of the previous bib
+files. This file is included by [[file:publis.tex][publis.tex]]. All I have to do then is
+to:
+1. compile =publis.tex= with pdflatex
+2. call bibtex on all the resulting .aux files
+3. compile =publis.tex= with pdflatex a few more times
+** Bibtable "by type"
+The =bibtable_bytype= can be used either to produce a table sorted by
+type and year. It can be used:
+
+- as on the [[http://simgrid.gforge.inria.fr/Usages.php][SimGrid website]] (in which case I generate an org table)
+  #+begin_src perl :results output org raw :exports both
+    use Text::BibTeX;
+    require "bibtex.pl";
+
+    $biblio = "mescal.bib";
+
+    my $bibfile = new Text::BibTeX::File($biblio);
+    bibtable_bytype($bibfile,"org");
+  #+end_src
+
+  #+RESULTS:
+  |----------------------------------------------+------+------+------+------+-------|
+  | Year                                         | 2013 | 2014 | 2015 | 2016 | Total |
+  |----------------------------------------------+------+------+------+------+-------|
+  | Journal articles                             |    7 |   10 |   16 |    2 |    35 |
+  | Conference articles                          |   20 |   20 |   10 |      |    50 |
+  | Accreditation to Supervise Research (H.D.R.) |      |      |    1 |      |     1 |
+  | PhD thesis                                   |    1 |      |      |      |     1 |
+  | Technical reports                            |   12 |    6 |    3 |    1 |    22 |
+  | Others                                       |    2 |    5 |    5 |      |    12 |
+  |----------------------------------------------+------+------+------+------+-------|
+  | Total                                        |   42 |   41 |   35 |    3 |   121 |
+  |----------------------------------------------+------+------+------+------+-------|
+
+- or as in activity reports (in which case I directly generate a [[file:liste_publications_table.tex][latex
+  table]]).
+  #+begin_src perl :results output :exports code :tangle bibtable.pl
+    use Text::BibTeX;
+    require "bibtex.pl";
+
+    $biblio = "mescal.bib";
+
+    my $bibfile = new Text::BibTeX::File($biblio);
+    bibtable_bytype($bibfile,"latex");
+  #+end_src
+
+  #+RESULTS:
+** Bibtable
+The =bibtable= function is used [[http://simgrid.gforge.inria.fr/Publications.php][SimGrid website]] to generate the table
+indicating how SimGrid is used. It builds on the fact that all our bib
+entries have an extra =category= field whose value can be either =extern=,
+=intra= or =core=. I won't detail it as it is very specific to this usage
+but some persons may find it interesting.
+* A bunch of useful functions for Inria activity reports or CV
+This is where most of the work is done. This is not intended to be
+generic or modular but it just works. Feel free to fork it and adapt.
+
+
+#+begin_src perl :results output :exports none :tangle bibtex.pl
+  use Text::BibTeX;
+
+  my($maxyear) = 2016;
+
+  my(@types) = ("article", "inproceedings", "hdr", "phdthesis", "inbook", "book", "techreport");
+  my(%pp_type) = (
+    "inproceedings" => "Conference articles",
+    "article" => "Journal articles",
+    "phdthesis" => "PhD thesis",
+    "hdr" => "Accreditation to Supervise Research (H.D.R.)",
+    "inbook" => "Book chapters",
+    "book" => "Books",
+    "techreport" => "Technical reports",
+    "others" => "Others",
+    );
+
+  sub uniq {
+      my %seen;
+      grep !$seen{$_}++, @_;
+  }
+
+  sub bibtable { 
+      my $bibfile = shift;
+
+      my(%count);
+
+      @cats = ("core", "intra", "extern");
+
+      my(%pp) = (
+          "core" => "SimGrid as a scientific object",
+          "extern" => "SimGrid as a scientific instrument",
+          "intra" => "SimGrid as a scientific instrument",
+          );
+
+      foreach $cat (@cats) {
+          foreach $year (2000..$maxyear) {
+              $count{$pp{$cat}}{$year} = 0;
+          }
+      }
+
+      while ($entry = new Text::BibTeX::Entry $bibfile) {
+          next unless $entry->parse_ok;
+          $year=$entry->get('year');
+          $cat=$entry->get('category');
+          $count{$pp{$cat}}{$year}+=1;
+      }
+      @years=();
+      foreach $cat (keys %count) {
+          @years = (@years, (keys %{$count{$cat}}));
+      }
+      @years = uniq(sort {$a <=> $b} @years);
+
+
+      print "|-\n";
+      print "| Year |".(join " | ",@years)." | Total |\n";
+      print "|-\n";
+      foreach $cat (uniq (values %pp)) {
+          @val = ();
+          $sum = 0;
+          foreach $year (@years) {
+              push @val, $count{$cat}{$year};
+          }
+          $sum += $_ for @val;
+          print "| $cat |".(join " | ",@val)." | $sum \n";
+      }
+      print "|-\n";
+  }
+
+  sub bibtable_bytype {
+      my $bibfile = shift;
+      my $format = shift or "org";
+
+      if($format eq "") { $format = "org"; }
+      if(($format ne "org") && ($format ne "latex")) {
+	  die "Invalid format '$format'\n";
+      }
+
+      my(%count);
+      foreach $cat (@types, "others") {
+          foreach $year (2000..$maxyear) {
+              $cat{$cat}{$year} = 0;
+          }
+      }
+
+      while ($entry = new Text::BibTeX::Entry $bibfile) {
+          next unless $entry->parse_ok;
+          $year=$entry->get('year');
+          $cat=$entry->type;
+	  if($cat eq "phdthesis") {
+	      if(!($entry->get('type') =~ "Theses")) {
+		  $cat = "hdr";
+	      }
+	  } elsif(!($cat ~~ @types)) { $cat = "others"; }
+          $count{$cat}{$year}+=1;
+      }
+
+      @years=();
+      foreach $cat (keys %count) {
+          @years = (@years, (keys %{$count{$cat}}));
+      }
+      @years = uniq(sort {$a <=> $b} @years);
+
+
+      if($format eq "org") {
+	  print "|-\n";
+	  print "| Year |".(join " | ",@years)." | Total |\n";
+	  print "|-\n";
+      } elsif($format eq "latex") {
+	  open TABLE, "> liste_publications_table.tex";
+	  print TABLE '\begin{center}\begin{tabular}{lrrrrr}\hline'."\n";
+	  print TABLE '  & '.(join " & ",@years).' & Total \\\\\\hline'."\n";
+      }
+      foreach $cat (@types, "others") {
+	  @val = ();
+	  $sum = 0;
+	  foreach $year (@years) {
+	      push @val, $count{$cat}{$year};
+	  }
+	  $sum += $_ for @val;
+	  if($sum==0) { next; }
+	  print "| $pp_type{$cat} |".(join " | ",@val)." | $sum \n" if($format eq "org");
+	  print TABLE "  $pp_type{$cat} &".(join " & ",@val)." & $sum ".'\\\\'."\n" if($format eq "latex");
+      }
+      if($format eq "org") {
+	  print "|-\n";
+	  print "| Total |";
+      } elsif($format eq "latex") {
+	  print TABLE '\\hline'."\n";
+	  print TABLE ' Total &';
+      }
+      $s = 0;
+      foreach $year (@years) {
+	  $sum = 0;
+	  @val = ();
+	  foreach $cat (@types, "others") {
+	      push @val, $count{$cat}{$year};
+	  }
+	  $sum += $_ for @val;
+	  $s += $sum;
+	  print " $sum | " if ($format eq "org");
+	  print TABLE " $sum & " if ($format eq "latex")
+      }
+      if($format eq "org") {
+	  print " $s |\n";
+	  print "|-\n";
+      } elsif($format eq "latex") {
+	  print TABLE "$s ".'\\\\\\hline'."\n";
+	  print TABLE '\end{tabular}\end{center}'."\n";
+	  close TABLE;
+      }
+  }
+
+  sub bibsplit {
+      my $bibfile_name = shift;
+
+      my(%count);
+      foreach $cat (@types, "others") {
+          foreach $year (2000..$maxyear) {
+              $cat{$cat}{$year} = 0;
+          }
+      }
+      my $bibfile = new Text::BibTeX::File($bibfile_name);
+      while ($entry = new Text::BibTeX::Entry $bibfile) {
+          next unless $entry->parse_ok;
+          $year=$entry->get('year');
+          $cat=$entry->type;
+          if(!($cat ~~ @types)) { $cat = "others"; }
+          $count{$cat}{$year}+=1;
+      }
+
+      @years=();
+      foreach $cat (keys %count) {
+          @years = (@years, (keys %{$count{$cat}}));
+      }
+      @years = uniq(sort {$b <=> $a} @years);
+
+      open BIBLIO, "> liste_publications.tex";
+      print BIBLIO '\\makeatletter
+\\let\\jobname@sav=\\jobname
+\\def\\jobname{liste_publications}
+\\bibliographystyle{abbrv}
+';
+      $oldval = $pp_type{"phdthesis"};
+      $pp_type{"phdthesis"} = "PhD thesis and Accreditation to Supervise Research (H.D.R.)";
+      foreach $cat (@types, "others") {
+	  @val = ();
+	  $sum = 0;
+	  $sum += $_ for (values(%{$count{$cat}}));
+	  if($sum==0) {next;}
+	  print BIBLIO '\\subsection*{'.$pp_type{$cat}."}\n";
+	  foreach $year (@years) {
+	      if($count{$cat}{$year}==0) { next; }
+	      my $bibfile = new Text::BibTeX::File($bibfile_name);
+	      $newfile_name = "$cat-$year.bib";
+
+	      print BIBLIO "\\begin{btSect}{$newfile_name}\n";
+	      print BIBLIO "\\subsubsection*{$year}\\btPrintAll"."\n".'\\end{btSect}'."\n\n";
+
+	      $newfile = new Text::BibTeX::File "> $newfile_name";
+	      while ($entry = new Text::BibTeX::Entry $bibfile)
+	      {
+		  next unless $entry->parse_ok;
+		  my $thiscat=$entry->type;
+		  if(!($thiscat ~~ @types)) { $thiscat = "others"; }
+
+		  $entry->write ($newfile) if($entry->get('year') eq $year && 
+					      $thiscat eq $cat);
+	      }
+	  }
+      }
+      $pp_type{"phdthesis"} = $oldval;
+      print BIBLIO '\\let\\jobname=\\jobname@sav\\makeatother'."\n";
+      close BIBLIO;
+  }
+
+  sub format_names {
+      my $names = shift;
+      my @names = split(/ and /, $names);
+      return (join ", ",@names);
+  }
+
+  sub format_clean {
+      my $str = shift;
+      $str =~ s/[{}]*//g;
+      $str =~ s/"//g;
+      return $str;
+  }
+
+  sub format_links {
+      my $entry = shift;
+      my @output;
+      if(defined($entry->get('pdf'))) {
+          push @output, ("[[".$entry->get('pdf')."][PDF]] ");
+      } 
+      if(defined($entry->get('url'))) {
+          push @output, ("[[".$entry->get('url')."][WWW]] ");
+      } 
+      if(defined($entry->get('doi'))) {
+          $doi = $entry->get('doi');
+          push @output, ("[[http://dx.doi.org/$doi][doi:$doi]] ");
+      } 
+      return @output;
+  }
+
+  sub format_journal {
+      my $entry = shift;
+      my @output=(format_names($entry->get('author')), ". *",$entry->get('title'),
+                  "*. /",$entry->get('journal'),"/, ",
+                  $entry->get('year'),". ");
+      if(defined($entry->get('volume'))) { push @output, .$entry->get('volume').""; }
+      if(defined($entry->get('number'))) { push @output, ("(".$entry->get('number').") "); }
+
+      push @output, format_links($entry);
+      return format_clean(join "", @output);
+  }
+
+  sub format_conf {
+      my $entry = shift;
+      my @output=(format_names($entry->get('author')), ". *",$entry->get('title'),
+                  "*. In /",$entry->get('booktitle'),"/, ",
+                  $entry->get('year'),". ");
+
+      push @output, format_links($entry);
+      return format_clean(join "", @output);
+  }
+
+  sub format_phdthesis {
+      my $entry = shift;
+      if(defined($entry->get('type'))) { $type = $entry->get('type'); }
+      else { 
+         $type = $entry->type;
+         if($type =~ /phd/) { $type="PhD. thesis. " ; }
+         elsif($type =~ /master/) { $type = "MSc. thesis. " ; }
+      }
+      my @output=(format_names($entry->get('author')), ". *",$entry->get('title'),
+                  "*. $type. /",$entry->get('school'),"/, ",
+                  $entry->get('year'),". ");
+
+      push @output, format_links($entry);
+      return format_clean(join "", @output);
+  }
+
+  sub format_techreport {
+      my $entry = shift;
+      my @output=(format_names($entry->get('author')), ". *",$entry->get('title'),
+                  "*. /",$entry->get('institution'),"/, ",
+                  $entry->get('year'),". ");
+      if(defined($entry->get('type'))) { push @output, ($entry->get('type')." "); }
+      if(defined($entry->get('number'))) { push @output, ("N° ".$entry->get('number')." "); }
+
+      push @output, format_links($entry);
+      return format_clean(join "", @output);
+  }
+
+  sub bibhtml {
+      my $bibfile = shift;
+      my $include_cat_pat = shift;
+      my $include_type_pat = shift;
+
+      while ($entry = new Text::BibTeX::Entry $bibfile) {
+          next unless $entry->parse_ok;
+          $cat = $entry->get('category');
+          next unless $$include_cat_pat{$cat};
+          next unless (!defined($include_type_pat) || $$include_type_pat{$entry->type});
+
+          if($entry->type =~ /article/) {
+              print "- ".(format_journal($entry))."\n";
+          } elsif($entry->type =~ /inproceedings/) {
+              print "- ".(format_conf($entry))."\n";
+          } elsif($entry->type =~ /techreport/) {
+              print "- ".(format_techreport($entry))."\n";
+          } elsif($entry->type =~ /phdthesis/ || $entry->type =~ /mastersthesis/) {
+              print "- ".(format_phdthesis($entry))."\n";
+          } else {
+              die "Unknown type ".$entry->type."\n";
+          }
+      }
+  }
+
+  # my $bibfile = new Text::BibTeX::File("all.bib");
+
+  # bibhtml($bibfile,"core");
+
+  1;
+#+end_src
+
+#+RESULTS:
+* Misc 
+** Adding calls to the perl script in the Makefile
+Here is how this can be done
+#+begin_src makefile :tangle Makefile.example
+liste_publications_table.tex: mescal.bib
+	perl bibtable.pl
+
+liste_publications.tex: mescal.bib
+	perl bibsplit.pl  
+#+end_src
+** Master LaTeX file
+#+begin_src sh :tangle publis.tex
+\documentclass[11pt,a4paper,twoside]{article}
+\usepackage[a4paper,margin=2cm]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage{palatino}
+\usepackage[pdftex, bookmarks=true, bookmarksnumbered=true,
+hypertexnames=false, breaklinks=true, colorlinks=false, pdfborder={0 00}]{hyperref}
+\input{liste_publications_package}
+
+\begin{document}
+
+\hypersetup{
+    pdfauthor   = {Generated using a crappy perl script!},
+    pdfproducer = {Arnaud Legrand},
+    pdfkeywords = {Bibliography; Publications}
+  }
+\pdfadjustspacing=1
+\section{Publications}
+\input{liste_publications}
+
+\input{liste_publications_table}
+
+\end{document}
+#+end_src
+** Required LaTeX packages
+#+begin_src sh :tangle liste_publications_package.tex
+\usepackage[utf8]{inputenc}
+\usepackage{url} \urlstyle{sf}
+\usepackage{xspace}
+\usepackage[francais,american]{babel}
+\usepackage{bibtopic}
+\usepackage{graphicx}
+#+end_src
