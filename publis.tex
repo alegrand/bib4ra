@@ -1,0 +1,22 @@
+\documentclass[11pt,a4paper,twoside]{article}
+\usepackage[a4paper,margin=2cm]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage{palatino}
+\usepackage[pdftex, bookmarks=true, bookmarksnumbered=true,
+hypertexnames=false, breaklinks=true, colorlinks=false, pdfborder={0 00}]{hyperref}
+\input{liste_publications_package}
+
+\begin{document}
+
+\hypersetup{
+    pdfauthor   = {Generated using a crappy perl script!},
+    pdfproducer = {Arnaud Legrand},
+    pdfkeywords = {Bibliography; Publications}
+  }
+\pdfadjustspacing=1
+\section{Publications}
+\input{liste_publications}
+
+\input{liste_publications_table}
+
+\end{document}

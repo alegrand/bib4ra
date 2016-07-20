@@ -1,0 +1,12 @@
+mescal.bib:
+	wget "http://haltools.inria.fr/Public/exportPubli.php?annee_publideb=2013&annee_publifin=2016&labos_exp=mescal&affi_exp=inria&format_export=raweb&langue=Anglais&Fen=Aff&format_export=raweb" --output-document=$@
+	sed -i -e 's/ *NOTE = .*$$//g' -e 's/@incollection/@inproceedings/' $@
+
+legrand.bib:
+	wget "https://haltools.inria.fr/Public/exportPubli.php?auteur_exp=Arnaud%2C+Legrand&format_export=raweb&langue=Anglais" --output-document=$@
+
+liste_publications_table.tex: mescal.bib
+	perl bibtable.pl
+
+liste_publications.tex: mescal.bib
+	perl bibsplit.pl  
