@@ -197,8 +197,8 @@ entries have an extra =category= field whose value can be either =extern=,
 but some persons may find it interesting.
 * A bunch of useful functions for Inria activity reports or CV
 This is where most of the work is done. This is not intended to be
-generic or modular but it just works. Feel free to fork it and adapt.
-
+generic or modular but it just works. Feel free to fork it and
+adapt. It is a bit long to be inlined here so just [[file:temp_files/bibtex.pl][look at the result]].
 
 #+begin_src perl :results output :exports none :tangle temp_files/bibtex.pl
   use Text::BibTeX;
@@ -539,7 +539,7 @@ liste_publications.tex: mescal.bib
 	perl bibsplit.pl  
 #+end_src
 ** Master LaTeX file
-#+begin_src sh :tangle temp_files/publis.tex
+#+begin_src latex :tangle temp_files/publis.tex
 \documentclass[11pt,a4paper,twoside]{article}
 \usepackage[a4paper,margin=2cm]{geometry}
 \usepackage[utf8]{inputenc}
@@ -564,7 +564,7 @@ hypertexnames=false, breaklinks=true, colorlinks=false, pdfborder={0 00}]{hyperr
 \end{document}
 #+end_src
 ** Required LaTeX packages
-#+begin_src sh :tangle temp_files/liste_publications_package.tex
+#+begin_src latex :tangle temp_files/liste_publications_package.tex
 \usepackage[utf8]{inputenc}
 \usepackage{url} \urlstyle{sf}
 \usepackage{xspace}
