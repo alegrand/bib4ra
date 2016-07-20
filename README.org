@@ -531,7 +531,7 @@ adapt. It is a bit long to be inlined here so just [[file:temp_files/bibtex.pl][
 * Misc 
 ** Adding calls to the perl script in the Makefile
 Here is how this can be done
-#+begin_src makefile :tangle temp_files/Makefile.example
+#+begin_src makefile :exports code :tangle temp_files/Makefile.example
 liste_publications_table.tex: mescal.bib
 	perl bibtable.pl
 
