@@ -25,8 +25,8 @@ package]].
 
 *History*: I've been writing such kind of things several times in shell
 using [[https://packages.debian.org/sid/tex/libtext-bibtex-perl][bibtool]], then in ruby within [[http://pistou.imag.fr/][pistou]] whose support is now
-discontinued, in perl/org-mode for the SimGrid website and ideally all
-of this will one day end up in HAL but I'm too lazy/busy to enter the
+discontinued, in perl/org-mode for the [[http://simgrid.gforge.inria.fr/][SimGrid website]] and ideally all
+of this will one day end up in [[https://hal.archives-ouvertes.fr/][HAL]] but I'm too lazy/busy to enter the
 php madness of HAL. Anyway, I finally realized after digging into this
 once more that simply sharing it could save time to others.
 
@@ -42,8 +42,8 @@ with [[https://packages.debian.org/sid/recode][recode]] for this:
 recode LaTeX..UTF-8 all2.bib
 #+end_src
 
-Most of my biblio comes from HAL. Here is what I use for getting it
-for team activity evaluation
+Most of my biblio comes from HAL. Here is what I use in my Makefiles
+for getting it for team activity evaluation
 #+begin_src makefile :tangle temp_files/Makefile.example
 mescal.bib:
 	wget "http://haltools.inria.fr/Public/exportPubli.php?annee_publideb=2013&annee_publifin=2016&labos_exp=mescal&affi_exp=inria&format_export=raweb&langue=Anglais&Fen=Aff&format_export=raweb" --output-document=$@
@@ -65,11 +65,10 @@ cd temp_files; make -f Makefile.example legrand.bib mescal.bib
 : wget "http://haltools.inria.fr/Public/exportPubli.php?annee_publideb=2013&annee_publifin=2016&labos_exp=mescal&affi_exp=inria&format_export=raweb&langue=Anglais&Fen=Aff&format_export=raweb" --output-document=mescal.bib
 : sed -i -e 's/ *NOTE = .*$//g' -e 's/@incollection/@inproceedings/' mescal.bib
 
-Then the nice pdf file can be generated like this:
+Then the nice [[file:temp_files/publis.pdf][pdf file]] can be generated like this:
 #+begin_src sh :results output silent :exports code
 cd temp_files; make -f Makefile.example liste_publications.tex
 #+end_src
-
 * Typical usages
 ** Splitting the bibliography
 The =bibsplit= function splits the bibliography in small bib files,
@@ -101,6 +100,19 @@ have to do is to modify your own LaTeX document as follows:
 2. =\input{liste_publications}= in your bibliography section
 3. =\input{liste_publications_table}= somewhere if you want a nice table
    summarizing the publications
+You can now compile your own LaTeX document normally without having to
+bother calling BibTeX. Note that you can use =\cite= normally as
+well. You can also have an other bibliography section with another
+bibliography style if you want. E.g.,
+#+begin_src latex
+\bibliographystyle{alpha}
+\subsection*{Additional Bibliography}
+\begin{btSect}{footbib}
+\btPrintAll
+\end{btSect}
+#+end_src
+In such case, you'll have to call bibtex for this part of the
+bibliography but pdflatex will tell you about it when compiling.
 *** How does it work?
 From =mescal.bib=, I generate the following bib files:
 #+begin_src sh :results output org raw :exports results
@@ -132,6 +144,9 @@ to:
 1. compile =publis.tex= with pdflatex
 2. call bibtex on all the resulting .aux files
 3. compile =publis.tex= with pdflatex a few more times
+
+There is a trick where I change the =\jobname= so that the generated
+files can be seamlessly reused from another document.
 ** Bibtable "by type"
 The =bibtable_bytype= can be used either to produce a table sorted by
 type and year. It can be used:
